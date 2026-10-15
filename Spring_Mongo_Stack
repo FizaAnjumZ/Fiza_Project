@@ -1,0 +1,31 @@
+node {
+    def buildNumber= BUILD_NUMBER
+    
+    stage ("Git Clone"){
+        git url :"https://github.com/FizaAnjumZ/spring-boot-mongo-docker.git", branch: 'master' 
+    }
+    
+    stage ("Build Maven"){
+        def mavenHome= tool name: 'Maven', type: 'maven'
+        sh "${mavenHome}/bin/mvn clean package"
+    }
+    
+    stage ("Build Docker Image"){
+        sh "docker build -t fizaanjumz/springbootapp:${buildNumber} ."
+    }
+    
+    stage ("Docker Login and Push"){
+        withCredentials([string(credentialsId: 'Docker_Hub_Pass', variable: 'Docker_Hub_Pass')]){
+        sh "docker login -u fizaanjumz -p ${Docker_Hub_Pass} "
+        }
+        sh "docker push fizaanjumz/springbootapp:${buildNumber}"
+    }
+    
+    stage("DeploytoDockerSwarmCluster"){
+         sshagent(credentials: ['Docker_Dev_Server_SSH'], executable: '') {
+            sh "scp -o StrictHostKeyChecking=no  docker-compose.yml ubuntu@172.31.9.234:/home/ubuntu/"
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo docker stack rm springbootstack || true"
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo docker stack deploy --prune --compose-file docker-compose.yml springbootstack "
+    }
+}
+}
