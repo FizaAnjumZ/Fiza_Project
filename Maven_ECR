@@ -1,0 +1,30 @@
+node{
+    
+    def buildNumber = BUILD_NUMBER
+  
+    stage ("Git Clone"){
+        git url: 'https://github.com/FizaAnjumZ/maven-web-application.git'
+    }
+    
+    stage ("Maven Build"){
+        def mavenHome= tool name: "Maven", type: "maven"
+        sh "${mavenHome}/bin/mvn clean package"
+        }
+
+    stage ("Build Docker Image"){
+        sh "docker build -t 022267198001.dkr.ecr.ap-south-1.amazonaws.com/maven-web-application:${buildNumber} ."
+        }
+    
+    stage ("Docker Login And Push") {
+        sh "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 022267198001.dkr.ecr.ap-south-1.amazonaws.com"
+        sh "docker push 022267198001.dkr.ecr.ap-south-1.amazonaws.com/maven-web-application:${buildNumber}"
+        }
+    
+    stage ("Deploy Application as Container in Deployment Server"){
+        sshagent(credentials: ['d5a5596c-7062-442d-96dd-3c74c4bf9aa0'], executable: '') {
+    }
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo docker service rm mavenapp || true"
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 022267198001.dkr.ecr.ap-south-1.amazonaws.com"
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo docker service create --name mavenapp -p 9090:8080 --replicas 2  022267198001.dkr.ecr.ap-south-1.amazonaws.com/maven-web-application:${buildNumber}"
+        }    
+}
