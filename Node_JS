@@ -1,0 +1,29 @@
+node{
+    def buildNumber= BUILD_NUMBER
+    stage ("Git Clone"){
+        git url :"https://github.com/FizaAnjumZ/nodejs-app-mss.git", branch: 'master'
+    }
+    
+    stage ("Download Dependencies") {
+        nodejs(nodeJSInstallationName: 'NodeJS') {
+        sh 'npm install'
+    }
+    }
+    
+    stage ("Docker Build"){
+        sh "docker build -t fizaanjumz/nodejsjenkins:${buildNumber} . " 
+    }
+    
+    stage ("Docker Login & Push") {
+        withCredentials([string(credentialsId: 'Docker_Hub_Pass', variable: 'Docker_Hub_Pass')]){ 
+        sh "docker login -u fizaanjumz -p ${Docker_Hub_Pass}"
+        }
+        sh "docker push fizaanjumz/nodejsjenkins:${buildNumber}"
+    }
+    
+    stage ("Deployment to Dep Server"){
+        sshagent(credentials: ['Docker_Dev_Server_SSH'], executable: '') {
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@ip-172-31-9-234 sudo docker run -d --name nodejsapp -p 9981:9981 -v mongodb fizaanjumz/nodejsjenkins:${buildNumber}"
+    }
+    }
+}
