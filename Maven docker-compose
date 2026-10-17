@@ -1,0 +1,35 @@
+node{
+    
+    def buildNumber = BUILD_NUMBER
+  
+    stage ("Git Clone"){
+        git url: 'https://github.com/FizaAnjumZ/maven-web-application.git'
+    }
+    
+    stage ("Maven Build"){
+        def mavenHome= tool name: "Maven", type: "maven"
+        sh "${mavenHome}/bin/mvn clean package"
+        }
+
+    stage ("Build Docker Image"){
+        sh "docker build -t fizaanjumz/maven-web-application:${buildNumber} ."
+        }
+    
+    stage ("Docker Login And Push") {
+        withCredentials([string(credentialsId: 'Docker_Hub_Pass', variable: 'Docker_Hub_Pass')]){
+        sh "docker login -u fizaanjumz -p ${Docker_Hub_Pass}"
+        }
+        sh "docker push fizaanjumz/maven-web-application:${buildNumber}"
+        }
+        
+    stage ("Edit the tag"){
+        sh "sed -i 's/VERSION/${buildNumber}/g' docker-compose.yml"
+       }
+       
+     stage ("Deploy Application as Container in Deployment Server"){
+         sshagent(credentials: ['d5a5596c-7062-442d-96dd-3c74c4bf9aa0'], executable: '') {
+         sh "scp -o StrictHostKeyChecking=no docker-compose.yml ubuntu@172.31.9.234:/home/ubuntu/docker-compose.yml"
+         sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.9.234 sudo docker-compose up -d "
+        }
+     }
+}
